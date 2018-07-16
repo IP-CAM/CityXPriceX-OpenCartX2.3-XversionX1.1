@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="utf-8"?>
+<modification>
+    <name>MoySklad Synchronization (OpenCart 2.3)</name>
+    <code>MoySklad Synchronization (OpenCart 2.3)</code>
+    <version>1.2</version>
+    <author>Artur Legusha</author>
+    <link>http://isyms.ru</link>
+    <file path="admin/model/catalog/product.php">
+        <operation>
+            <search trim="true|false" index="0"><![CDATA[$this->db->query("DELETE FROM " . DB_PREFIX . "coupon_product WHERE product_id = '" . (int)$product_id . "'");]]></search>
+            <add position="after" offset="1"><![CDATA[
+            $this->db->query("DELETE FROM " . DB_PREFIX . "uuid WHERE product_id = '" . (int)$product_id . "'");   
+            ]]></add>
+        </operation>
+    </file>
+    <file path="catalog/model/catalog/information.php">
+        <operation>
+            <search trim="true|false" index="0"><![CDATA[class ModelCatalogInformation extends Model {]]></search>
+            <add position="after" offset="0"><![CDATA[
+
+            //получаем product_id с таблици uuid для обновы инфы текущего товара    
+            public function getForCronInfo(){
+                $query = $this->db->query("SELECT product_id FROM `" . DB_PREFIX . "uuid`");
+
+               return $query->rows;
+            }
+ 
+            //обновляем информацию о товаре
+            public function updateProduct($data){
+                $this->db->query("UPDATE " . DB_PREFIX . "product SET  quantity = '" . (int)$data['quantity'] . "', stock_status_id = '" . (int)$data['stock_status_id'] . "' WHERE product_id = '" . (int)$data['product_id'] . "'");
+
+                    if (isset($data['image_name_product'])) {
+            $this->db->query("UPDATE " . DB_PREFIX . "product SET image = '" . $this->db->escape($data['image_name_product']) . "' WHERE product_id = '" . (int)$data['product_id'] . "'");
+                    }
+
+             return true;
+            }
+ 
+            //получаем с базы название товара по ид товара
+            public function getNameProduct($id){
+                $query = $this->db->query("SELECT product_id,name FROM `".DB_PREFIX."product_description` WHERE product_id = '" . (int)$id . "'");
+                return $query->row;
+            }
+
+
+
+            ]]></add>
+        </operation>
+    </file>
+    <file path="catalog/controller/common/home.php">
+        <operation>
+            <search trim="true|false" index="0"><![CDATA[class ControllerCommonHome extends Controller {]]></search>
+            <add position="after" offset="0"><![CDATA[
+
+            //тут храним временные данные    
+            public $cache = [];
+
+            //храним url  МойСклад API
+            public $urlAPI = "https://online.moysklad.ru/api/remap/1.1/";
+
+            protected function dataClient(){
+                //получаем данные в переменные
+                $mas = [
+                    "login" => (!empty($this->config->get('moyskladOC23Synch12_username'))) ? $this->config->get('moyskladOC23Synch12_username') : false,
+                    "pass" => (!empty($this->config->get('moyskladOC23Synch12_password'))) ? $this->config->get('moyskladOC23Synch12_password') : false
+                ];
+
+                return $mas;
+            }
+
+            //главный метод который запускает крон    
+            public function cron(){
+                $this->load->model('catalog/information');
+
+                //данные с базы сохраняем во временное хранилище
+                $this->cache = $this->model_catalog_information->getForCronInfo();
+
+                 //делаем проверку есть ли в базе записи uuid
+                 if(!empty($this->cache)){
+                  if(!empty($this->getAllProduct())){
+                    $this->getQuantity();
+                    $this->insertInfo();
+                    $this->downloadImage();
+                  }
+                }
+                
+            }
+
+            //по ссылке получаем всю нужную инфу
+            public function getAllProduct(){
+                $this->load->model('catalog/information');
+
+                $data = $this->cache;
+                unset($this->cache);
+                $mas = [];
+
+                foreach ($data as $dat){
+                  $mas[] = $this->model_catalog_information->getNameProduct($dat['product_id']);
+                 }
+
+                return $this->cache = $mas;
+                 
+            }
+ 
+            //получаем количество доступного товара в "Остатках"
+            public function getQuantity(){
+
+
+                $data = $this->cache;
+
+                unset($this->cache);
+
+                $mas = [];
+                $resp = [];
+
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 20);  
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+                curl_setopt($ch, CURLOPT_USERPWD, $this->dataClient()['login'].":".$this->dataClient()['pass']);
+                curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+                curl_setopt($ch, CURLOPT_HTTPHEADER,array('Content-Type: application/json'));
+ 
+                  
+                foreach($data as $dat){
+                   curl_setopt($ch, CURLOPT_URL,$this->urlAPI."entity/assortment?filter=name=".urlencode($dat['name']));
+
+                   $response = json_decode(curl_exec($ch),true);
+
+                   //формируем результат по столбцу "Доступно" в моем складе
+                 $quantity = (!empty($response['rows'][0]['quantity'])) ? $response['rows'][0]['quantity'] : 0;
+                    
+                    //получаем имя картинки и ссылку на нее
+                 if(!empty($response['rows'][0]['image'])){
+                    $href = (!empty($response['rows'][0]['image']['meta']['href'])) ? $response['rows'][0]['image']['meta']['href'] : "";
+                    $filename = (!empty($response['rows'][0]['image']['filename'])) ? $response['rows'][0]['image']['filename'] : "";
+                    $image_name_product = (!empty($filename)) ? 'catalog/moysklad/'.$filename : "";
+                 }else{
+                    $href = "";
+                    $filename = "";
+                    $image_name_product = "";
+                 }
+                    
+                    //если количество == 0  то ставим статус товара "Нет в наличии" иначе  "В наличии"
+                    if($quantity == 0){
+                        $stock_status_id = 5;
+                    }elseif($quantity != 0){
+                        $stock_status_id = 7;
+                    }
+
+                    $mas[] = [
+                      'product_id'  => $dat['product_id'],
+                      'quantity'    => $quantity,
+                      'stock_status_id'  =>  $stock_status_id,
+                      'image_name_product'  => $image_name_product,
+                      'image_name'  => $filename,
+                      'image_href'  => $href,
+
+                    ];
+
+
+                }
+
+                curl_close($ch);
+ 
+               return $this->cache = $mas;
+                
+            }
+
+            //перезаписываем данные о количестве и название картинки+заносим в базу кэш
+            public function insertInfo(){
+                $this->load->model('catalog/information');
+                
+                foreach($this->cache as $dat){
+                    $product = $this->model_catalog_information->updateProduct($dat);
+                }
+
+                return $this->cache;
+                
+                
+             }
+
+            //функция по скачиванию картинок из моего склада
+            function downloadImage(){
+                    
+                    $masImage = $this->cache;
+                    unset($this->cache);
+
+                         //проверяем существует ли директория в которую будем заносить картинки, если нет то создаем
+                        if (empty(file_exists("image/catalog/moysklad"))) {
+                             $dir_image = mkdir("image/catalog/moysklad", 0777, true);
+
+                             //даем права на создание файлов
+                             chmod("image/catalog/moysklad", 0777);
+
+                             //Если папка не создалась выводим false
+                             if(empty($dir_image)){
+                                 $dir_image = false;
+
+                             }else{
+                                $dir_image = "image/catalog/moysklad/";
+                             }
+
+                        }else{
+                            $dir_image = "image/catalog/moysklad/";
+                        }
+
+
+                        //проверяем создалась ли нами папка + есть ли картинки для скачивания
+                        if(!empty($masImage) && !empty($dir_image)){
+                            //создаем массив который будет хранить инфу для скачивания
+                            $data_image = [];
+
+                            $ch = curl_init();
+                            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 20);  
+                            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+                            curl_setopt($ch, CURLOPT_USERPWD, $this->dataClient()['login'].":".$this->dataClient()['pass']);
+                            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+                            curl_setopt($ch, CURLOPT_HTTPHEADER, array(   
+                                    'Accept: application/octet-stream',
+                                    'Content-Type: application/octet-stream')                                                           
+                                );
+                            foreach($masImage as $image){
+             
+                                curl_setopt($ch, CURLOPT_URL,$image['image_href']);
+                                $response = curl_exec($ch);
+
+                               //проверяем нету ли ошибок на стороне сервера, если нету то загружаем картинку
+                                if(!empty($response)){
+                                    $data_image[] = [
+                                        'name_image'    => 'image/catalog/moysklad/'.$image['image_name'],
+                                        'response'      =>  $response,
+                                    ];
+                                } 
+                            }
+
+                            curl_close($ch);
+
+                             
+                            //запускаем цикл по скачиванию картинок
+                            foreach($data_image as $img){
+                               file_put_contents($img['name_image'], $img['response']); 
+                            }
+                        
+                        }
+
+                        return false;
+                     
+                }
+
+
+
+
+            ]]></add>
+        </operation>
+    </file>   
+ </modification>
+
