@@ -26,5 +26,31 @@ class ModelToolCitypriceOC23 extends Model {
         }
         return true;
     }
+
+    //добавляем новую запись
+    public function AddNew($data){
+
+      $this->db->query('INSERT INTO `'.DB_PREFIX.'city_price` SET product_id = ' . (int)$data["product_id"] . ', `city_id` = "' . (int)$data["city_id"] . '", `price` = "' . $data["price"] . '"');  
+      
+      return true;
+
+    }
+
+    //по имени делаем поиск товара, а в ответ получаем ид товара
+    public function FindProductID($name){
+
+      $query = $this->db->query("SELECT product_id FROM `".DB_PREFIX."product_description` WHERE name LIKE '$name' ");
+      
+      return $query->row;
+    }
+
+    //делаем поиск по названию города, что бы получить  его id
+    public function FindCityID($name){
+
+      $query = $this->db->query("SELECT zone_id FROM `".DB_PREFIX."zone` WHERE name LIKE '$name' ");
+      
+      return $query->row;
+
+    }
   
 }

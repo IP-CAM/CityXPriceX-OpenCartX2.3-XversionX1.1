@@ -4,15 +4,18 @@ error_reporting(E_ALL ^E_NOTICE);
 
 class ControllerextensionmoduleCitypriceOC23 extends Controller {
  
- #TODO надо юзать эту таблицу для формирования строк во view
- #https://getbootstrap.com/docs/3.3/css/#tables-bordered
- 
+ #TODO что  бы не плодить в каждой строке форму лучше заюзать функцию onclick и передать туда параметры для вызова или удаления. Заюзать одну функцию на редактирования и на удаления юзая параметр del = false если нужно редактировать или же del = true если нужно будет удалить
+
+
     public function index() {
         
         $this->load->language('extension/module/citypriceOC23');
         
+        $this->document->addStyle('view/stylesheet/jquery.fancybox.min.css');
         $this->document->addStyle('view/stylesheet/citypriceOC23.css');
-        //$this->document->addScript('view/javascript/jquery/tabs.js');
+        $this->document->addStyle('view/stylesheet/form.css');
+        $this->document->addScript('view/js/jquery.fancybox.min.js');
+        $this->document->addScript('view/js/func.js');
         
         $this->document->setTitle($this->language->get('heading_title'));
         $this->load->model('extension/module');
@@ -29,7 +32,16 @@ class ControllerextensionmoduleCitypriceOC23 extends Controller {
 
         $data['button_save'] = $this->language->get('button_save');
         $data['button_cancel'] = $this->language->get('button_cancel');
-       
+
+        $data['product_name'] = $this->language->get('product_name');
+        $data['product_price'] = $this->language->get('product_price');
+        $data['product_city'] = $this->language->get('product_city');
+        $data['product_action'] = $this->language->get('product_action');
+
+        $data['text_button_add'] = $this->language->get('text_button_add');
+        $data['text_button_update'] = $this->language->get('text_button_update');
+        $data['text_button_del'] = $this->language->get('text_button_del');
+ 
         if (isset($this->error['warning'])) {
             $data['error_warning'] = $this->error['warning'];
         }
@@ -58,18 +70,20 @@ class ControllerextensionmoduleCitypriceOC23 extends Controller {
         $data['token'] = $this->session->data['token'];
 
         $data['action'] = $this->url->link('extension/module/citypriceOC23', 'token=' . $this->session->data['token'], true);
-
-        //используем ссылку в форме для импорта товара
-        $data['action_import'] = $this->url->link('extension/module/citypriceOC23/getMethodImport', 'token=' . $this->session->data['token'], true);
-
-        //используем ссылку в форме для загрузки картинок
-        $data['action_get_images'] = $this->url->link('extension/module/citypriceOC23/downloadImage', 'token=' . $this->session->data['token'], true);
-
-        //используем ссылку в форме для выгрузки заказов
-        $data['action_get_orders'] = $this->url->link('extension/module/citypriceOC23/getOrders', 'token=' . $this->session->data['token'], true);
  
         $data['cancel'] = $this->url->link('extension/extension', 'token=' . $this->session->data['token'] . '&type=module', true);
 
+        //ссылка созданию строки в таблице
+        $data['action_add'] = $this->url->link('extension/module/citypriceOC23/add', 'token=' . $this->session->data['token'], true);
+
+        //ссылка по редактированию строки в таблице
+        $data['action_update'] = $this->url->link('extension/module/citypriceOC23/update', 'token=' . $this->session->data['token'], true);
+
+        ////ссылка по удалению строки в таблице
+        $data['action_del'] = $this->url->link('extension/module/citypriceOC23/del', 'token=' . $this->session->data['token'], true);
+
+        //содержим весь товар
+        $data['products'] = $this->getProductPrice();
        
 
         //получаем доступ к модели модуля и создаем таблицы в базе
@@ -102,6 +116,45 @@ class ControllerextensionmoduleCitypriceOC23 extends Controller {
         }
 
         return !$this->error;
+
+    }
+
+    //Метод по созданию новой записи
+    public function add(){
+        $this->load->model('tool/citypriceOC23');
+        
+        //делаем проверку, что бы при добавлении новой строки были все данные
+        if(!empty($_POST['product_name']) && !empty($_POST['product_price']) && !empty($_POST['product_city'])){
+
+            #TODO а когда назад сохранять то что бы на оборот делало поиск по имени и получало id  и заносило в базу id
+
+            $data = [
+                'product_id' => $this->model_tool_citypriceOC23->FindProductID($_POST['product_name'])['product_id'],
+                'city_id' => $this->model_tool_citypriceOC23->FindCityID($_POST['product_city'])['zone_id'],
+                'price' => $_POST['product_price'],
+            ];
+
+
+
+            //заносим в базу только что полученные данные
+            $this->model_tool_citypriceOC23->AddNew($data);
+
+            
+            
+            //после добавления строки делаем редирект в сам модуль
+            $this->response->redirect($this->url->link('extension/module/citypriceOC23','token=' . $this->session->data['token'] . '&type=module', true)); 
+ 
+
+        }else{
+            return false;
+        }
+ 
+    }
+
+    //получаем весь список товара добавленого в таблицу oc_city_price и выводим во view
+    public function getProductPrice(){
+
+        #TODO тут надо будет взять и сформировать массив с ид получить имена и вывести в массив, что бы было читабельно
 
     }
 }
