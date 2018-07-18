@@ -23,7 +23,7 @@ error_reporting(E_ALL ^E_NOTICE);
     <div class="panel panel-default">
     </div>
     <div class="button_product_add">
-       <a class="modalbox btn btn-success" href="#inline"><?= $text_button_add; ?></a>
+       <a class="modalbox btn btn-success" href="#form-add"><?= $text_button_add; ?></a>
     </div> 
     <div class="bs-example" data-example-id="bordered-table">
    <table class="table table-bordered">
@@ -38,19 +38,19 @@ error_reporting(E_ALL ^E_NOTICE);
       </thead>
       <tbody>
 
-      <?php !empty($products):?> 
+      <?php if(!empty($products)):?> 
         <?php foreach($products as $product):?>  
          <tr>
-            <td><?=$product['id'];?></td>
-            <td><?=$product['product_name'];?></td>
-            <td><?=$product['product_price'];?></td>
-            <td><?=$product['product_city'];?></td>
+            <td><?=$product_id_val = $product['id'];?></td>
+            <td><?=$product_name_val = $product['product_name'];?></td>
+            <td><?=$product_price_val = $product['product_price'];?></td>
+            <td><?=$product_city_val = $product['product_city'];?></td>
              <td>
               <div class="button_product_update">
-                <button type="button" class="btn btn-primary"><?= $text_button_update; ?></button>
+                <a class="modalbox btn btn-primary" onclick='form_update("<?=$product_id_val;?>","<?=$product_name_val;?>","<?=$product_price_val;?>","<?=$product_city_val;?>")' href="#form-update"><?= $text_button_update; ?></a>
               </div>
               <div class="button_product_del">
-                <button type="button" class="btn btn-danger"><?= $text_button_del; ?></button>
+                 <a class="btn btn-danger button_del" href='<?=$action_del."&id=$product_id_val";?>'><?= $text_button_del; ?></a>
               </div>
             </td>
          </tr>
@@ -61,28 +61,33 @@ error_reporting(E_ALL ^E_NOTICE);
 </div>
   </div>
  </div>
- 
- <div id="inline" style="display: none; cursor: auto;">
+<div class="row">
+  <div class="col-sm-6 text-right"><?php echo $pagination; ?></div>
+</div>
+
+
+<!-- Form Add !--> 
+<div id="form-add" style="display: none; cursor: auto;">
    <h2><?= $text_button_add; ?></h2>
   <div class="inner contact">
    <!-- Form Area -->
    <div class="contact-form">
       <!-- Form -->
-      <form id="contact-us" method="post" action="<?= $action_add;?>">
+      <form id="contact-us-add" method="post" action="<?= $action_add;?>">
          <!-- Left Inputs -->
          <div class="col-md-12 wow animated slideInLeft" data-wow-delay=".5s">
             <!-- product_name -->
-            <input type="text" name="product_name" id="product_name" required="required" class="form" placeholder="<?= $product_name; ?>" />
+            <input type="text" name="product_name" id="product_name-add" required="required" class="form product_name_search" placeholder="<?= $product_name; ?>" />
             <!-- product_price -->
-            <input type="text" name="product_price" id="product_price" required="required" class="form" placeholder="<?= $product_price; ?>" />
+            <input type="text" name="product_price" id="product_price-add" required="required" class="form" placeholder="<?= $product_price; ?>" />
             <!-- product_city -->
-            <input type="text" name="product_city" id="product_city" required="required" class="form" placeholder="<?= $product_city; ?>" />
+            <input type="text" name="product_city" id="product_city-add" required="required" class="form product_city_search" placeholder="<?= $product_city; ?>" />
          </div>
          <!-- End Left Inputs -->
         <!-- Bottom Submit -->
          <div class="relative fullwidth col-xs-12">
             <!-- Send Button -->
-            <button type="submit" id="submit" name="submit" class="form-btn semibold"><?= $button_save; ?></button> 
+            <button type="submit" id="submit-add" name="submit" class="form-btn semibold"><?= $button_save; ?></button> 
          </div>
          <!-- End Bottom Submit -->
          <!-- Clear -->
@@ -95,7 +100,80 @@ error_reporting(E_ALL ^E_NOTICE);
 </div>
 
 
-<?php #TODO тут раз написать функцию на php и просто сюда передавать параметры нужные для редактирования, а в цыкл передать вызов функции которая будет рендерить саму форму?>
 
+<!-- Form Update !-->
+<div id="form-update" style="display: none; cursor: auto;">
+   <h2><?= $text_button_update; ?> № <span class="update_id"></span></h2>
+  <div class="inner contact">
+   <!-- Form Area -->
+   <div class="contact-form">
+      <!-- Form -->
+      <form id="contact-us-update" method="post" action="<?= $action_update;?>">
+         <!-- Left Inputs -->
+         <div class="col-md-12 wow animated slideInLeft" data-wow-delay=".5s">
+            <!-- product_id -->
+            <input type="hidden" name="id" id="product_id-update" class="form" />
+            <!-- product_name -->
+            <input type="text" name="product_name" id="product_name-update" required="required" class="form product_name_search" placeholder="<?= $product_name; ?>" />
+            <!-- product_price -->
+            <input type="text" name="product_price" id="product_price-update" required="required" class="form" placeholder="<?= $product_price; ?>" />
+            <!-- product_city -->
+            <input type="text" name="product_city" id="product_city-update" required="required" class="form product_city_search" placeholder="<?= $product_city; ?>" />
+         </div>
+         <!-- End Left Inputs -->
+        <!-- Bottom Submit -->
+         <div class="relative fullwidth col-xs-12">
+            <!-- Send Button -->
+            <button type="submit" id="submit-update" name="submit" class="form-btn semibold"><?= $button_save; ?></button> 
+         </div>
+         <!-- End Bottom Submit -->
+         <!-- Clear -->
+         <div class="clear"></div>
+      </form>
+    </div>
+   <!-- End Contact Form Area -->
+</div>
+<!-- End Inner -->
+</div>
+ 
+<script>
+  $(document).ready(function() {
+   //подключаем плагин fancybox 
+   $(".modalbox").fancybox();
+
+  //живой поиск товара
+  $( ".product_name_search" ).autocomplete({
+      source: function( request, response ) {
+        $.ajax({
+          url: "index.php?route=extension/module/citypriceOC23/SearchLiveProduct&token=<?=$_GET['token'];?>",
+          dataType: "json",
+          data: {
+            q: request.term
+          },
+          success: function( data ) {
+            response( data );
+          }
+        });
+    },
+  });
+
+  //живой поиск города
+  $( ".product_city_search" ).autocomplete({
+      source: function( request, response ) {
+        $.ajax({
+          url: "index.php?route=extension/module/citypriceOC23/SearchLiveCity&token=<?=$_GET['token'];?>",
+          dataType: "json",
+          data: {
+            q: request.term
+          },
+          success: function( data ) {
+            response( data );
+          }
+        });
+    },
+  });
+ 
+});
+</script>
 
 <?php echo $footer; ?>

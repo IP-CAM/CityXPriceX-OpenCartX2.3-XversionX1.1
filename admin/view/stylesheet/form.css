@@ -91,3 +91,7 @@ input {
     position: relative;
     z-index: 9999;
 }
+
+.ui-front {
+ z-index: 99999;
+}
